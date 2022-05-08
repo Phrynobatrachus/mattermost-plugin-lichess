@@ -4,6 +4,8 @@ go 1.18
 
 require github.com/mattermost/mattermost-server/v6 v6.6.1
 
+require google.golang.org/appengine v1.6.7 // indirect
+
 require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -54,6 +56,7 @@ require (
 	github.com/yuin/goldmark v1.4.7 // indirect
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
+	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
 	golang.org/x/sys v0.0.0-20220224120231-95c6836cb0e7 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/genproto v0.0.0-20220222213610-43724f9ea8cf // indirect

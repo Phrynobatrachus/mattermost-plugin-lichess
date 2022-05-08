@@ -1,20 +1,102 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 
 	"github.com/mattermost/mattermost-server/v6/plugin"
+	"golang.org/x/oauth2"
 )
 
 type LichessPlugin struct {
 	plugin.MattermostPlugin
+}
 
-	botID string
+const (
+	authServerURL = "https://lichess.org"
+)
+
+var (
+	config = oauth2.Config{
+		ClientID:    "mattermost-lichess-plugin",
+		Scopes:      []string{"preference:read"},
+		RedirectURL: "http://localhost:8065/plugins/com.mattermost.lichess-plugin/callback",
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  authServerURL + "/oauth",
+			TokenURL: authServerURL + "/api/token",
+		},
+	}
+	globalToken    *oauth2.Token
+	globalVerifier string
+	globalState    string
+)
+
+func genVerifier() (string, error) {
+	seed, err := rand.Prime(rand.Reader, 256)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(seed.Bytes()), nil
+}
+
+func genCodeChallengeS256(s string) string {
+	s256 := sha256.Sum256([]byte(s))
+	return base64.URLEncoding.EncodeToString(s256[:])
 }
 
 func (p *LichessPlugin) handleLogin(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "login data?")
+	verifier, err := genVerifier()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	globalVerifier = verifier
+
+	state, err := genVerifier()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	globalState = state
+
+	u := config.AuthCodeURL(
+		state,
+		oauth2.SetAuthURLParam("code_challenge", genCodeChallengeS256(verifier)),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+	)
+
+	http.Redirect(w, r, u, http.StatusFound)
+}
+
+func (p *LichessPlugin) handleCallback(w http.ResponseWriter, r *http.Request) {
+	qs := r.URL.Query()
+	state := qs.Get("state")
+	code := qs.Get("code")
+
+	if state != globalState {
+		http.Error(w, "State invalid", http.StatusBadRequest)
+		return
+	}
+
+	if code == "" {
+		http.Error(w, "Code not found", http.StatusBadRequest)
+		return
+	}
+
+	token, err := config.Exchange(context.Background(), code, oauth2.SetAuthURLParam("code_verifier", globalVerifier))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	globalToken = token
+
+	e := json.NewEncoder(w)
+	e.SetIndent("", " ")
+	e.Encode(token)
 }
 
 func (p *LichessPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
@@ -27,6 +109,8 @@ func (p *LichessPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *h
 	switch r.URL.Path {
 	case "/login":
 		p.handleLogin(w, r)
+	case "/callback":
+		p.handleCallback(w, r)
 	default:
 		http.NotFound(w, r)
 	}
