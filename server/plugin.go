@@ -22,9 +22,10 @@ const (
 
 var (
 	config = oauth2.Config{
-		ClientID:    "mattermost-lichess-plugin",
-		Scopes:      []string{"preference:read"},
-		RedirectURL: "http://localhost:8065/plugins/com.mattermost.lichess-plugin/callback",
+		ClientID:     "abcdef",
+		ClientSecret: "123456789",
+		Scopes:       []string{"preference:read"},
+		RedirectURL:  "http://localhost:8065/plugins/com.mattermost.lichess-plugin/callback",
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  authServerURL + "/oauth",
 			TokenURL: authServerURL + "/api/token",
@@ -45,7 +46,7 @@ func genVerifier() (string, error) {
 
 func genCodeChallengeS256(s string) string {
 	s256 := sha256.Sum256([]byte(s))
-	return base64.URLEncoding.EncodeToString(s256[:])
+	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(s256[:])
 }
 
 func (p *LichessPlugin) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -74,20 +75,20 @@ func (p *LichessPlugin) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (p *LichessPlugin) handleCallback(w http.ResponseWriter, r *http.Request) {
 	qs := r.URL.Query()
-	state := qs.Get("state")
-	code := qs.Get("code")
+	s := qs.Get("state")
+	c := qs.Get("code")
 
-	if state != globalState {
+	if s != globalState {
 		http.Error(w, "State invalid", http.StatusBadRequest)
 		return
 	}
 
-	if code == "" {
+	if c == "" {
 		http.Error(w, "Code not found", http.StatusBadRequest)
 		return
 	}
 
-	token, err := config.Exchange(context.Background(), code, oauth2.SetAuthURLParam("code_verifier", globalVerifier))
+	token, err := config.Exchange(context.Background(), c, oauth2.SetAuthURLParam("code_verifier", globalVerifier))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
