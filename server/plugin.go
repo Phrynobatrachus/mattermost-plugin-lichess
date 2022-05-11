@@ -2,67 +2,94 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
+	"path"
+	"sync"
 
+	pluginapi "github.com/mattermost/mattermost-plugin-api"
 	"github.com/mattermost/mattermost-server/v6/plugin"
+	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
 
-type LichessPlugin struct {
+type Plugin struct {
 	plugin.MattermostPlugin
+	pluginAPI *pluginapi.Client
+	//lichessAPI *lichessapi.Client
+
+	configurationLock sync.RWMutex
+	configuration     *Configuration
 }
 
-const (
-	authServerURL = "https://lichess.org"
-)
-
 var (
-	config = oauth2.Config{
-		ClientID:     "abcdef",
-		ClientSecret: "123456789",
-		Scopes:       []string{"preference:read"},
-		RedirectURL:  "http://localhost:8065/plugins/com.mattermost.lichess-plugin/callback",
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  authServerURL + "/oauth",
-			TokenURL: authServerURL + "/api/token",
-		},
-	}
 	globalToken    *oauth2.Token
 	globalVerifier string
 	globalState    string
 )
 
-func genVerifier() (string, error) {
-	seed, err := rand.Prime(rand.Reader, 256)
+func (p *Plugin) getOAuthConfig() (*oauth2.Config, error) {
+	scopes := []string{"preference:read"}
+	config := p.getConfiguration()
+
+	baseURL := config.getBaseURL()
+	authURL, err := url.Parse(baseURL)
 	if err != nil {
-		return "", err
+		return nil, errors.Wrap(err, "failed to parse Lichess base URL")
 	}
-	return base64.URLEncoding.EncodeToString(seed.Bytes()), nil
+	tokenURL, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse Lichess base URL")
+	}
+
+	authURL.Path = path.Join(authURL.Path, "oauth")
+	tokenURL.Path = path.Join(tokenURL.Path, "api", "token")
+
+	redirectURL, err := url.Parse(fmt.Sprintf("%s/plugins/com.mattermost.lichess-plugin/callback", *p.pluginAPI.Configuration.GetConfig().ServiceSettings.SiteURL))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse redirect URL")
+	}
+
+	return &oauth2.Config{
+		ClientID:     config.LichessOAuthClientID,
+		ClientSecret: config.LichessOAuthClientSecret,
+		Scopes:       scopes,
+		RedirectURL:  redirectURL.String(),
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  authURL.String(),
+			TokenURL: tokenURL.String(),
+		},
+	}, nil
 }
 
-func genCodeChallengeS256(s string) string {
-	s256 := sha256.Sum256([]byte(s))
-	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(s256[:])
-}
+func (p *Plugin) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-func (p *LichessPlugin) handleLogin(w http.ResponseWriter, r *http.Request) {
-	verifier, err := genVerifier()
+	verifier, err := generateSecret(*base64.RawURLEncoding, 64)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	globalVerifier = verifier
 
-	state, err := genVerifier()
+	state, err := generateSecret(*base64.RawURLEncoding, 32)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	globalState = state
+
+	config, err := p.getOAuthConfig()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	u := config.AuthCodeURL(
 		state,
@@ -73,7 +100,7 @@ func (p *LichessPlugin) handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, u, http.StatusFound)
 }
 
-func (p *LichessPlugin) handleCallback(w http.ResponseWriter, r *http.Request) {
+func (p *Plugin) handleCallback(w http.ResponseWriter, r *http.Request) {
 	qs := r.URL.Query()
 	s := qs.Get("state")
 	c := qs.Get("code")
@@ -88,8 +115,15 @@ func (p *LichessPlugin) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	config, err := p.getOAuthConfig()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	token, err := config.Exchange(context.Background(), c, oauth2.SetAuthURLParam("code_verifier", globalVerifier))
 	if err != nil {
+		fmt.Fprint(w, globalVerifier)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -100,11 +134,11 @@ func (p *LichessPlugin) handleCallback(w http.ResponseWriter, r *http.Request) {
 	e.Encode(token)
 }
 
-func (p *LichessPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
+func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
 	_, err := r.Cookie("MMUSERID")
-
 	if err != nil {
 		http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
+		return
 	}
 
 	switch r.URL.Path {
@@ -114,10 +148,46 @@ func (p *LichessPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *h
 		p.handleCallback(w, r)
 	default:
 		http.NotFound(w, r)
+		return
 	}
 
 }
 
-func main() {
-	plugin.ClientMain(&LichessPlugin{})
+func (p *Plugin) OnActivate() error {
+	pluginAPIClient := pluginapi.NewClient(p.API, p.Driver)
+	p.pluginAPI = pluginAPIClient
+
+	siteURL := p.pluginAPI.Configuration.GetConfig().ServiceSettings.SiteURL
+	if siteURL == nil || *siteURL == "" {
+		return errors.New("siteURL must be set")
+	}
+
+	err := p.setDefaultConfiguration()
+	if err != nil {
+		return errors.Wrap(err, "failed to set default configuration")
+	}
+
+	return nil
+}
+
+func (p *Plugin) setDefaultConfiguration() error {
+	config := p.getConfiguration()
+
+	changed, err := config.setDefaults()
+	if err != nil {
+		return err
+	}
+
+	if changed {
+		configMap, err := config.ToMap()
+		if err != nil {
+			return err
+		}
+
+		err = p.pluginAPI.Configuration.SavePluginConfig(configMap)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

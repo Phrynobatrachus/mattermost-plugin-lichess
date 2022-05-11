@@ -4,7 +4,11 @@ go 1.18
 
 require github.com/mattermost/mattermost-server/v6 v6.6.1
 
-require google.golang.org/appengine v1.6.7 // indirect
+require (
+	github.com/blang/semver/v4 v4.0.0 // indirect
+	github.com/mattermost/mattermost-plugin-api v0.0.27 // indirect
+	google.golang.org/appengine v1.6.7 // indirect
+)
 
 require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
