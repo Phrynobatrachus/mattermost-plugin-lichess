@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -290,5 +289,7 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	fmt.Fprint(w, *tok)
+	e := json.NewEncoder(w)
+	e.SetIndent("", "  ")
+	e.Encode(tok)
 }

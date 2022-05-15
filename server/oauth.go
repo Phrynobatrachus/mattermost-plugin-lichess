@@ -94,8 +94,8 @@ func (ob *OAuthBroker) UnsubscribeOAuthComplete(userID string, ch <-chan error) 
 }
 
 func (ob *OAuthBroker) publishOAuthComplete(userID string, err error, fromCluster bool) {
-	ob.lock.Unlock()
 	ob.lock.Lock()
+	defer ob.lock.Unlock()
 
 	if ob.closed {
 		return
