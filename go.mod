@@ -2,11 +2,14 @@ module mattermost-plugin-lichess
 
 go 1.18
 
-require github.com/mattermost/mattermost-server/v6 v6.6.1
+require (
+	github.com/gorilla/mux v1.8.0
+	github.com/mattermost/mattermost-plugin-api v0.0.27
+	github.com/mattermost/mattermost-server/v6 v6.6.1
+)
 
 require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
-	github.com/mattermost/mattermost-plugin-api v0.0.27 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 )
 
@@ -47,7 +50,7 @@ require (
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/philhofer/fwd v1.1.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rs/xid v1.3.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect

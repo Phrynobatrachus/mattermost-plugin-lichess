@@ -9,7 +9,7 @@
     "min_server_version": "6.6.0",
     "server": {
         "executables": {
-            "linux-amd64": "lichess-plugin.exe"        
+            "linux-amd64": "lichess-plugin-amd64"        
         }
     },
     "webapp": {
