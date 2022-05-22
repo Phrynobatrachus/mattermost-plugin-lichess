@@ -100,7 +100,7 @@ func (p *Plugin) initializeAPI() {
 	oauthRouter := p.router.PathPrefix("/oauth").Subrouter()
 
 	oauthRouter.HandleFunc("/connect", p.checkAuth(p.attachContext(p.handleLogin), ResponseTypePlain)).Methods(http.MethodGet)
-	oauthRouter.HandleFunc("/callback", p.checkAuth(p.attachContext(p.handleCallback), ResponseTypePlain)).Methods(http.MethodGet)
+	oauthRouter.HandleFunc("/complete", p.checkAuth(p.attachContext(p.handleCallback), ResponseTypePlain)).Methods(http.MethodGet)
 }
 
 func (p *Plugin) checkAuth(handler http.HandlerFunc, responseType ResponseType) http.HandlerFunc {
@@ -242,8 +242,8 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var state OAuthState
-	if err := json.Unmarshal(storedState, &state); err != nil {
+	var oauthState OAuthState
+	if err := json.Unmarshal(storedState, &oauthState); err != nil {
 		rErr = errors.Wrap(err, "json unmarshal failed")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -258,7 +258,7 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if s != state.State {
+	if s != oauthState.State {
 		http.Error(w, "State invalid", http.StatusBadRequest)
 		return
 	}
@@ -268,7 +268,7 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if state.UserID != c.UserID {
+	if c.UserID != oauthState.UserID {
 		rErr = errors.New("not authorized, incorrect user")
 		http.Error(w, rErr.Error(), http.StatusUnauthorized)
 		return
@@ -280,7 +280,7 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	tok, err := config.Exchange(c.Ctx, code, oauth2.SetAuthURLParam("code_verifier", state.Verifier))
+	tok, err := config.Exchange(c.Ctx, code, oauth2.SetAuthURLParam("code_verifier", oauthState.Verifier))
 	if err != nil {
 		c.Log.WithError(err).Warnf("Failed to exchange oauth code into token")
 
@@ -289,7 +289,66 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	e := json.NewEncoder(w)
-	e.SetIndent("", "  ")
-	e.Encode(tok)
+	userInfo := &LichessUserInfo{
+		UserID: oauthState.UserID,
+		Token:  tok,
+	}
+
+	if err = p.storeLichessUserInfo(userInfo); err != nil {
+		c.Log.WithError(err).Warnf("failed to store Lichess user info")
+		rErr = errors.Wrap(err, "unable to connect user to Lichess")
+		http.Error(w, rErr.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// ts := oauth2.StaticTokenSource(tok)
+	// tc := oauth2.NewClient(c.Ctx, ts)
+
+	// res, err := tc.Get("https://lichess.org/api/account/")
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusBadRequest)
+	// 	return
+	// }
+	// body, err := io.ReadAll(res.Body)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+	// res.Body.Close()
+
+	// err = json.Unmarshal(body, &uPref)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+
+	// fetchedInfo, err := p.getLichessUserInfo(oauthState.UserID)
+	// if err != nil {
+	// 	c.Log.WithError(err).Warnf("failed to get Lichess user info")
+	// 	rErr = errors.Wrap(err, "unable to connect user to Lichess")
+	// 	http.Error(w, rErr.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+
+	// p.writeJSON(w, fetchedInfo)
+
+	html := `
+	<!DOCTYPE html>
+	<html>
+	<head>
+	<script>
+	//window.close();
+	</script>
+	<body>
+	<p>Completed connecting to Lichess. Please close this window.</p>
+	</body>
+	</html>
+	`
+	w.Header().Set("Content-Type", "text/html")
+	_, err = w.Write([]byte(html))
+	if err != nil {
+		c.Log.WithError(err).Warnf("failed to write html response")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }

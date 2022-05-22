@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/gorilla/mux"
@@ -37,6 +38,7 @@ type OAuthState struct {
 
 const (
 	lichessOauthKey = "lichessoauthkey_"
+	lichessTokenKey = "_lichesstoken"
 )
 
 func (p *Plugin) OnActivate() error {
@@ -90,4 +92,49 @@ func (p *Plugin) setDefaultConfiguration() error {
 		}
 	}
 	return nil
+}
+
+func (p *Plugin) storeLichessUserInfo(info *LichessUserInfo) error {
+	config := p.getConfiguration()
+
+	encryptedToken, err := encrypt([]byte(config.EncryptionKey), info.Token.AccessToken)
+	if err != nil {
+		return errors.Wrap(err, "error occured while encrypting access token")
+	}
+
+	info.Token.AccessToken = encryptedToken
+
+	jsonInfo, err := json.Marshal(info)
+	if err != nil {
+		return errors.Wrap(err, "error while converting user info to json")
+	}
+
+	if err := p.API.KVSet(info.UserID+lichessTokenKey, jsonInfo); err != nil {
+		return errors.Wrap(err, "failed to store user info in kv store")
+	}
+
+	return nil
+}
+
+func (p *Plugin) getLichessUserInfo(userID string) (*LichessUserInfo, error) {
+	config := p.getConfiguration()
+
+	info, appErr := p.API.KVGet(userID + lichessTokenKey)
+	if appErr != nil {
+		return nil, errors.Wrap(appErr, "failed  to get Lichess user info from kv store")
+	}
+
+	var userInfo LichessUserInfo
+	if err := json.Unmarshal(info, &userInfo); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal user info")
+	}
+
+	unencryptedToken, err := decrypt([]byte(config.EncryptionKey), userInfo.Token.AccessToken)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decrypt lichess token")
+	}
+
+	userInfo.Token.AccessToken = unencryptedToken
+
+	return &userInfo, nil
 }

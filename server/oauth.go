@@ -42,7 +42,7 @@ func (p *Plugin) getOAuthConfig() (*oauth2.Config, error) {
 	tokenURL.Path = path.Join(tokenURL.Path, "api", "token")
 
 	redirectURL, err := url.Parse(
-		fmt.Sprintf("%s/plugins/com.mattermost.lichess-plugin/oauth/callback",
+		fmt.Sprintf("%s/plugins/com.mattermost.lichess-plugin/oauth/complete",
 			*p.pluginAPI.Configuration.GetConfig().ServiceSettings.SiteURL,
 		))
 	if err != nil {
