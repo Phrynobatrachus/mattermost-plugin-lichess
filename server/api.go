@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -289,6 +290,28 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	ts := oauth2.StaticTokenSource(tok)
+	tc := oauth2.NewClient(c.Ctx, ts)
+
+	res, err := tc.Get("https://lichess.org/api/account/")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer res.Body.Close()
+
+	var prefs UserPrefs
+	err = json.Unmarshal(body, prefs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	userInfo := &LichessUserInfo{
 		UserID: oauthState.UserID,
 		Token:  tok,
@@ -300,27 +323,6 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 		http.Error(w, rErr.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	// ts := oauth2.StaticTokenSource(tok)
-	// tc := oauth2.NewClient(c.Ctx, ts)
-
-	// res, err := tc.Get("https://lichess.org/api/account/")
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusBadRequest)
-	// 	return
-	// }
-	// body, err := io.ReadAll(res.Body)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-	// res.Body.Close()
-
-	// err = json.Unmarshal(body, &uPref)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
 
 	// fetchedInfo, err := p.getLichessUserInfo(oauthState.UserID)
 	// if err != nil {

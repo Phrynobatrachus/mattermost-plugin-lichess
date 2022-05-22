@@ -1,4 +1,4 @@
-module mattermost-plugin-lichess
+module github.com/Phrynobatrachus/mattermost-plugin-lichess
 
 go 1.18
 
