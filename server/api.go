@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	lichess "github.com/Phrynobatrachus/mattermost-plugin-lichess/server/lichess/"
 	"github.com/gorilla/mux"
 	"github.com/mattermost/mattermost-plugin-api/experimental/bot/logger"
 	"github.com/mattermost/mattermost-server/v6/plugin"
@@ -305,7 +306,7 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 	}
 	defer res.Body.Close()
 
-	var prefs UserPrefs
+	var prefs lichess.UserPrefs
 	err = json.Unmarshal(body, prefs)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
