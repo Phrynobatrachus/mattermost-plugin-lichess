@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Perfs struct {
 	Chess960       Chess960       `json:"chess960"`

@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Rapid struct {
 	Games  int  `json:"games"`

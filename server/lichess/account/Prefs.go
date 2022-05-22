@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Prefs struct {
 	Dark          bool   `json:"dark"`

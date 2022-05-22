@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Atomic struct {
 	Games  int  `json:"games"`

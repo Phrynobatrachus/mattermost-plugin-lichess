@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type UltraBullet struct {
 	Games  int  `json:"games"`

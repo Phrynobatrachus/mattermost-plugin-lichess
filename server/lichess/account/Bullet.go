@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Bullet struct {
 	Games  int  `json:"games"`

@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type RacingKings struct {
 	Games  int  `json:"games"`

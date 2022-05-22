@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Correspondence struct {
 	Games  int  `json:"games"`

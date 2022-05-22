@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type KingOfTheHill struct {
 	Games  int  `json:"games"`

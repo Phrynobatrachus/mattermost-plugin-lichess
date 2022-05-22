@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type PlayTime struct {
 	Total int `json:"total"`

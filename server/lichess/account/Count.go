@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Count struct {
 	All      int `json:"all"`

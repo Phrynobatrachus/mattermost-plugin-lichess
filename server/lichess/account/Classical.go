@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Classical struct {
 	Games  int  `json:"games"`

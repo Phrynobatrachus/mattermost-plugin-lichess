@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Profile struct {
 	Country    string `json:"country"`

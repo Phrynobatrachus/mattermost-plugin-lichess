@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type Chess960 struct {
 	Games  int  `json:"games"`

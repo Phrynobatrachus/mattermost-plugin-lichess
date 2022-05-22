@@ -1,4 +1,4 @@
-package main
+package lichess
 
 type LichessAccount struct {
 	Id             string   `json:"id"`
