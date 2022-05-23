@@ -26,8 +26,9 @@ type Plugin struct {
 }
 
 type LichessUserInfo struct {
-	UserID string
-	Token  *oauth2.Token
+	UserID          string
+	Token           *oauth2.Token
+	LichessUsername string
 }
 
 type OAuthState struct {

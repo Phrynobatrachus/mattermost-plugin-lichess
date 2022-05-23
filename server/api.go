@@ -9,7 +9,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	lichess "github.com/Phrynobatrachus/mattermost-plugin-lichess/server/lichess/"
+	"github.com/Phrynobatrachus/mattermost-plugin-lichess/server/lichess"
 	"github.com/gorilla/mux"
 	"github.com/mattermost/mattermost-plugin-api/experimental/bot/logger"
 	"github.com/mattermost/mattermost-server/v6/plugin"
@@ -294,7 +294,7 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 	ts := oauth2.StaticTokenSource(tok)
 	tc := oauth2.NewClient(c.Ctx, ts)
 
-	res, err := tc.Get("https://lichess.org/api/account/")
+	res, err := tc.Get("https://lichess.org/api/account")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -306,16 +306,17 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 	}
 	defer res.Body.Close()
 
-	var prefs lichess.UserPrefs
-	err = json.Unmarshal(body, prefs)
+	var account lichess.LichessAccount
+	err = json.Unmarshal(body, &account)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	userInfo := &LichessUserInfo{
-		UserID: oauthState.UserID,
-		Token:  tok,
+		UserID:          oauthState.UserID,
+		LichessUsername: account.Username,
+		Token:           tok,
 	}
 
 	if err = p.storeLichessUserInfo(userInfo); err != nil {
@@ -325,33 +326,24 @@ func (p *Plugin) handleCallback(c *Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// fetchedInfo, err := p.getLichessUserInfo(oauthState.UserID)
-	// if err != nil {
-	// 	c.Log.WithError(err).Warnf("failed to get Lichess user info")
-	// 	rErr = errors.Wrap(err, "unable to connect user to Lichess")
-	// 	http.Error(w, rErr.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-
-	// p.writeJSON(w, fetchedInfo)
-
 	html := `
-	<!DOCTYPE html>
-	<html>
-	<head>
-	<script>
-	//window.close();
-	</script>
-	<body>
-	<p>Completed connecting to Lichess. Please close this window.</p>
-	</body>
-	</html>
-	`
+			<!DOCTYPE html>
+			<html>
+			<head>
+			<script>
+			//window.close();
+			</script>
+			</head>
+			<body>
+			<p>Connected to Lichess. Please close this window.</p>
+			</body>
+			</html>
+			`
 	w.Header().Set("Content-Type", "text/html")
 	_, err = w.Write([]byte(html))
 	if err != nil {
 		c.Log.WithError(err).Warnf("failed to write html response")
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
